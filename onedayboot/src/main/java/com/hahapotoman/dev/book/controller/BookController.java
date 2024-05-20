@@ -1,18 +1,25 @@
 package com.hahapotoman.dev.book.controller;
 
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
+import org.springframework.validation.Errors;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
 import com.hahapotoman.dev.book.dto.BookCreateDTO;
+import com.hahapotoman.dev.book.dto.BookEditDTO;
 import com.hahapotoman.dev.book.dto.BookEditResponseDTO;
+import com.hahapotoman.dev.book.dto.BookListResponseDTO;
 import com.hahapotoman.dev.book.dto.BookReadResponseDTO;
 import com.hahapotoman.dev.book.service.BookService;
 
@@ -59,12 +66,43 @@ public class BookController {
 		return mav;
 	}
 	
+	@PostMapping("/book/edit/{bookId}")
+	public ModelAndView update(@Validated BookEditDTO bookEditDTO, Errors errors) {
+		if(errors.hasErrors()) {
+			String errorMessage = errors.getFieldErrors().stream().map(x -> x.getField() + " : " + x.getDefaultMessage()).collect(Collectors.joining("\n"));
+			return this.error422(errorMessage, String.format("/book/edit/%s", bookEditDTO.getBookId()));
+		};
+		this.bookService.update(bookEditDTO);
+		
+		ModelAndView mav = new ModelAndView();
+		mav.setViewName(String.format("redirect:/book/read/%s", bookEditDTO.getBookId()));
+		return mav;
+	}
+	
+	@PostMapping("/book/delete")
+	public String delete(Integer bookId) throws NoSuchElementException {
+		this.bookService.delete(bookId);
+		return "redirect:/book/list";
+	}
+	
+	@GetMapping(value = {"/book/list", "/book"})
+	public ModelAndView bookList(@RequestParam(name = "title", required = false) String title, @RequestParam(name = "page", required = false) Integer page, ModelAndView mav) {
+		mav.setViewName("/book/list");
+		List<BookListResponseDTO> books = this.bookService.bookList(title, page);
+		mav.addObject("books", books);
+		return mav;
+	}
+	
 	@ExceptionHandler(NoSuchElementException.class)
-	public ModelAndView noSuchElementExceptionHandler(NoSuchElementException ex) {
+	public ModelAndView noSuchElementExceptionHandler(NoSuchElementException ex) {		
+		return this.error422("책 정보가 없습니다.", "/book/list");
+	}
+	
+	private ModelAndView error422(String message, String location) {
 		ModelAndView mav = new ModelAndView();
 		mav.setStatus(HttpStatus.UNPROCESSABLE_ENTITY);
-		mav.addObject("message", "책 정보가 없습니다.");
-		mav.addObject("location", "/book/list");
+		mav.addObject("message", message);
+		mav.addObject("location", location);
 		mav.setViewName("common/error/422");
 		return mav;
 	}
